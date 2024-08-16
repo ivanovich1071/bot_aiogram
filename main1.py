@@ -1,10 +1,8 @@
 import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-from aiogram import F
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
-from aiogram import Router
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, FSInputFile
+from aiogram import F, Router
 import requests
 import config
 import os
@@ -27,7 +25,6 @@ city_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-
 # Функция получения погоды
 def get_weather(city_name):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city_name}&appid={config.WEATHER_API_KEY}&units=metric&lang=ru"
@@ -36,7 +33,6 @@ def get_weather(city_name):
         return response.json()
     else:
         return None
-
 
 # Функция выбора изображения по температуре
 def choose_image_by_temperature(temperature):
@@ -51,7 +47,6 @@ def choose_image_by_temperature(temperature):
     else:
         return None
 
-
 # Хендлер для команды /start
 @router.message(Command("start"))
 async def start_command(message: types.Message):
@@ -61,7 +56,6 @@ async def start_command(message: types.Message):
         reply_markup=city_keyboard
     )
 
-
 # Хендлер для команды /help
 @router.message(Command("help"))
 async def help_command(message: types.Message):
@@ -69,13 +63,12 @@ async def help_command(message: types.Message):
         "Напишите название города, чтобы узнать текущую погоду. Используйте команду /start для перезапуска бота."
     )
 
-
 # Хендлер для команды /city или ввода названия города
 @router.message(Command("city"))
 async def city_command(message: types.Message):
     await message.reply("Введите название города:")
 
-
+# Хендлер для получения и отправки погоды с изображением
 @router.message(F.text)
 async def get_city_weather(message: types.Message):
     city_name = message.text
@@ -90,7 +83,15 @@ async def get_city_weather(message: types.Message):
         # Выбор и отправка изображения в зависимости от температуры
         image_path = choose_image_by_temperature(temperature)
         if image_path:
-            await message.answer_photo(photo=open(image_path, 'rb'))
+            # Создаем абсолютный путь к изображению
+            full_image_path = os.path.join(os.path.dirname(__file__), image_path)
+            if os.path.exists(full_image_path):
+                try:
+                    # Используем FSInputFile для отправки изображения
+                    photo = FSInputFile(full_image_path)
+                    await message.answer_photo(photo=photo)
+                except Exception as e:
+                    await message.reply(f"Произошла ошибка при отправке изображения: {e}")
 
         await message.reply(
             f"В городе {city} температура - {temperature}°C\nВлажность воздуха - {humidity}%\nАтмосферное давление - {pressure} мм рт. ст."
@@ -100,19 +101,19 @@ async def get_city_weather(message: types.Message):
             "Не удалось найти погоду для указанного города. Пожалуйста, проверьте правильность написания города."
         )
 
-
 # Хендлер для получения и сохранения изображений от пользователя
-@router.message(content_types=types.ContentType.PHOTO)
+@router.message(F.photo)
 async def handle_photo(message: types.Message):
     photo_id = message.photo[-1].file_id
-    photo = await bot.get_file(photo_id)
+    file_info = await bot.get_file(photo_id)
 
-    file_path = photo.file_path
+    # Создание папки img, если она не существует
+    if not os.path.exists("img"):
+        os.makedirs("img")
+
     destination = f"img/{photo_id}.jpg"
-
-    await bot.download_file(file_path, destination)
+    await bot.download_file(file_info.file_path, destination)
     await message.reply_photo(photo=photo_id, caption="Вы отправили фото")
-
 
 # Запуск бота
 if __name__ == "__main__":
