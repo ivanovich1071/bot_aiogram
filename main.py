@@ -3,10 +3,10 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
 from aiogram import F
-from aiogram.utils.keyboard import ReplyKeyboardBuilder
 from aiogram import Router
 import requests
 import config
+from googletrans import Translator  # Импортируем Translator для перевода текста
 
 # Логирование для отслеживания работы бота
 logging.basicConfig(level=logging.INFO)
@@ -14,7 +14,6 @@ logging.basicConfig(level=logging.INFO)
 # Инициализация бота и диспетчера
 bot = Bot(token=config.TOKEN)
 dp = Dispatcher()
-
 router = Router()
 dp.include_router(router)
 
@@ -26,7 +25,6 @@ city_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True
 )
 
-
 # Функция получения погоды
 def get_weather(city_name):
     url = f"http://api.openweathermap.org/data/2.5/weather?q={city_name}&appid={config.WEATHER_API_KEY}&units=metric&lang=ru"
@@ -36,30 +34,47 @@ def get_weather(city_name):
     else:
         return None
 
-
 # Хендлер для команды /start
 @router.message(Command("start"))
 async def start_command(message: types.Message):
     user_name = message.from_user.first_name
     await message.reply(
         f"Привет, {user_name}! Я бот, который может показать погоду. Нажмите на кнопку ниже и введите город.",
-        reply_markup=city_keyboard)
-
+        reply_markup=city_keyboard
+    )
 
 # Хендлер для команды /help
 @router.message(Command("help"))
 async def help_command(message: types.Message):
     await message.reply(
-        "Напишите название города, чтобы узнать текущую погоду. Используйте команду /start для перезапуска бота.")
+        "Напишите название города, чтобы узнать текущую погоду. Используйте команду /start для перезапуска бота."
+    )
 
-
-# Хендлер для команды /city или ввода названия города
+# Хендлер для команды /city
 @router.message(Command("city"))
 async def city_command(message: types.Message):
     await message.reply("Введите название города:")
 
+# Хендлер для команды /translate
+@router.message(Command("translate"))
+async def translate_command(message: types.Message):
+    await message.reply("Введите текст для перевода:")
 
-@router.message(F.text)
+# Хендлер для перевода текста
+@router.message(F.text & ~F.text.startswith("/"))
+async def handle_text_message(message: types.Message):
+    if message.text.startswith("/translate"):
+        translator = Translator()
+        text_to_translate = message.text.replace("/translate", "").strip()
+        if text_to_translate:
+            translated_text = translator.translate(text_to_translate, dest='en').text
+            await message.reply(f"Перевод: {translated_text}")
+        else:
+            await message.reply("Пожалуйста, введите текст для перевода после команды /translate.")
+    else:
+        await get_city_weather(message)
+
+# Хендлер для получения и отправки погоды
 async def get_city_weather(message: types.Message):
     city_name = message.text
     weather_data = get_weather(city_name)
@@ -70,11 +85,14 @@ async def get_city_weather(message: types.Message):
         humidity = weather_data["main"]["humidity"]
         pressure = weather_data["main"]["pressure"]
         await message.reply(
-            f"В городе {city} температура - {temperature}°C\nВлажность воздуха - {humidity}%\nАтмосферное давление - {pressure} мм рт. ст.")
+            f"В городе {city} температура - {temperature}°C\n"
+            f"Влажность воздуха - {humidity}%\n"
+            f"Атмосферное давление - {pressure} мм рт. ст."
+        )
     else:
         await message.reply(
-            "Не удалось найти погоду для указанного города. Пожалуйста, проверьте правильность написания города.")
-
+            "Не удалось найти погоду для указанного города. Пожалуйста, проверьте правильность написания города."
+        )
 
 # Запуск бота
 if __name__ == "__main__":
