@@ -11,7 +11,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 from gtts import gTTS
 import config
-
+import asyncio
 # Логирование для отслеживания работы бота
 logging.basicConfig(level=logging.INFO)
 
@@ -21,15 +21,14 @@ dp = Dispatcher(storage=MemoryStorage())
 router = Router()
 dp.include_router(router)
 
-# Создание базы данных SQLite
 def init_db():
     conn = sqlite3.connect("users.db")
     cursor = conn.cursor()
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS users (
-        id INTEGER PRIMARY KEY,
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT,
-        chat_id INTEGER PRIMARY KEY,
+        chat_id INTEGER UNIQUE,
         registration_name TEXT,
         age INTEGER,
         registration_city TEXT,
@@ -40,6 +39,7 @@ def init_db():
     conn.close()
 
 init_db()
+
 
 # Определение состояний для регистрации
 class RegistrationStates(StatesGroup):
@@ -103,7 +103,8 @@ async def start_command(message: types.Message, state: FSMContext):
 
     conn = sqlite3.connect("users.db")
     cursor = conn.cursor()
-    cursor.execute("INSERT INTO users (username, chat_id) VALUES (?, ?) ON CONFLICT(chat_id) DO NOTHING", (username, message.chat.id))
+    #cursor.execute("INSERT INTO users (username, chat_id) VALUES (?, ?) ON CONFLICT(chat_id) DO NOTHING", (username, message.chat.id))
+    cursor.execute("INSERT OR IGNORE INTO users (username, chat_id) VALUES (?, ?)", (username, message.chat.id))
     conn.commit()
     conn.close()
 
